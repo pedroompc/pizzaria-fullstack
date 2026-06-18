@@ -21,10 +21,8 @@ services:
     rootDir: FrontEnd-Pizzaria
     buildCommand: npm install && npm run build
     staticPublishPath: dist
-    envVars:
-      # URL pública da API (definida explicitamente para o build do frontend)
-      - key: VITE_API_URL
-        value: https://pizzaria-api-10pp.onrender.com
+    # A URL da API já está fixada no código (src/api/index.js), então não
+    # dependemos de variável de ambiente aqui (evita host incompleto via fromService).
     routes:
       # SPA: qualquer rota cai no index.html (React Router cuida do resto)
       - type: rewrite

@@ -1,12 +1,15 @@
 import axios from 'axios'
 
 // Define a URL da API - [Pedro Marinho]
-// 1) Usa VITE_API_URL se definida no build; 2) senão, detecta produção pelo domínio
-//    (em onrender.com aponta para a API publicada; em localhost usa a API local).
+// Só aceita VITE_API_URL se vier como URL COMPLETA (http/https). Se vier vazia ou
+// um host incompleto (ex.: "pizzaria-api-10pp", como a Render injeta via fromService),
+// ignora e usa a URL fixa de produção. Em localhost, usa a API local.
 const PROD_API_URL = 'https://pizzaria-api-10pp.onrender.com'
 const isLocalhost = typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
-const RAW_API_URL = import.meta.env.VITE_API_URL || (isLocalhost ? 'http://localhost:4000' : PROD_API_URL)
-const BASE_URL = /^https?:\/\//.test(RAW_API_URL) ? RAW_API_URL : `https://${RAW_API_URL}`
+const envUrl = import.meta.env.VITE_API_URL
+const BASE_URL = (envUrl && /^https?:\/\//.test(envUrl))
+  ? envUrl
+  : (isLocalhost ? 'http://localhost:4000' : PROD_API_URL)
 
 const api = axios.create({
   baseURL: BASE_URL,
