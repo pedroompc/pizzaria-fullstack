@@ -1,0 +1,74 @@
+// Schema do banco de dados (Prisma + SQLite) - [Pedro Marinho]
+// Modelos: User, Category, Product, Order, OrderItem
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Usuário do sistema: serve tanto para autenticação (MANAGER/SUPER_ADMIN)
+// quanto para os clientes da pizzaria (CUSTOMER).
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  pwd       String // senha com hash (bcrypt)
+  phone     String?
+  address   String?
+  role      String   @default("CUSTOMER") // CUSTOMER | MANAGER | SUPER_ADMIN
+  status    String   @default("ACTIVE") // ACTIVE | SUSPEND | INATIVE
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Categoria de produtos (ex: Pizzas, Bebidas, Sobremesas)
+model Category {
+  id        String    @id @default(cuid())
+  name      String
+  products  Product[]
+  createdAt DateTime  @default(now())
+}
+
+// Produto do cardápio
+model Product {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  price       Float
+  available   Boolean     @default(true)
+  categoryId  String?
+  category    Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  items       OrderItem[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+// Pedido feito por um cliente
+model Order {
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id])
+  address   String?
+  note      String?
+  status    String      @default("PENDING") // PENDING | PREPARING | OUT_FOR_DELIVERY | DELIVERED | CANCELLED
+  total     Float       @default(0)
+  items     OrderItem[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+// Item de um pedido (produto + quantidade + preço congelado no momento da compra)
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int     @default(1)
+  price     Float // preço unitário no momento do pedido
+}
