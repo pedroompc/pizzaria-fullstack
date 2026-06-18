@@ -1,0 +1,155 @@
+// CRUD de pedidos, com itens e cálculo de total - [Pedro Marinho]
+const { Router } = require('express')
+const prisma = require('../lib/prisma')
+const { authRequired } = require('../middleware/auth')
+const { sanitizeUser } = require('../lib/helpers')
+
+const router = Router()
+router.use(authRequired)
+
+// Define o que vem aninhado em cada pedido:
+// - user (nome/telefone para a tabela e detalhe)
+// - items -> product (nome do produto em cada item)
+const orderInclude = {
+  user: true,
+  items: { include: { product: true } },
+}
+
+// Remove a senha do usuário aninhado antes de devolver o pedido
+function cleanOrder(order) {
+  if (!order) return order
+  return { ...order, user: order.user ? sanitizeUser(order.user) : null }
+}
+
+const STATUSES = ['PENDING', 'PREPARING', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED']
+
+// GET /orders -> todos os pedidos (mais recentes primeiro)
+router.get('/', async (_req, res) => {
+  const orders = await prisma.order.findMany({ include: orderInclude, orderBy: { createdAt: 'desc' } })
+  res.json(orders.map(cleanOrder))
+})
+
+// GET /orders/status/:status
+router.get('/status/:status', async (req, res) => {
+  const orders = await prisma.order.findMany({
+    where: { status: req.params.status },
+    include: orderInclude,
+    orderBy: { createdAt: 'desc' },
+  })
+  res.json(orders.map(cleanOrder))
+})
+
+// GET /orders/user/:userId
+router.get('/user/:userId', async (req, res) => {
+  const orders = await prisma.order.findMany({
+    where: { userId: req.params.userId },
+    include: orderInclude,
+    orderBy: { createdAt: 'desc' },
+  })
+  res.json(orders.map(cleanOrder))
+})
+
+// GET /orders/:id
+router.get('/:id', async (req, res) => {
+  const order = await prisma.order.findUnique({ where: { id: req.params.id }, include: orderInclude })
+  if (!order) return res.status(404).json({ message: 'Pedido não encontrado' })
+  res.json(cleanOrder(order))
+})
+
+// POST /orders -> { userId, address, note, items: [{ productId, quantity }] }
+// Calcula o preço de cada item e o total do pedido no servidor.
+router.post('/', async (req, res) => {
+  try {
+    const { userId, address, note, items } = req.body
+    if (!userId) return res.status(400).json({ message: 'Cliente (userId) é obrigatório' })
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: 'O pedido precisa de ao menos um item' })
+    }
+
+    // Busca os produtos para congelar o preço atual e calcular o total
+    const productIds = items.map((i) => i.productId)
+    const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
+    const priceMap = new Map(products.map((p) => [p.id, p.price]))
+
+    let total = 0
+    const itemData = items.map((i) => {
+      const price = priceMap.get(i.productId)
+      if (price === undefined) {
+        throw Object.assign(new Error('Produto inexistente'), { http: 400 })
+      }
+      const quantity = parseInt(i.quantity) || 1
+      total += price * quantity
+      return { productId: i.productId, quantity, price }
+    })
+
+    const order = await prisma.order.create({
+      data: {
+        userId,
+        address: address || null,
+        note: note || null,
+        status: 'PENDING',
+        total,
+        items: { create: itemData },
+      },
+      include: orderInclude,
+    })
+    res.status(201).json(cleanOrder(order))
+  } catch (err) {
+    if (err.http === 400) return res.status(400).json({ message: err.message })
+    console.error(err)
+    res.status(500).json({ message: 'Erro ao criar pedido' })
+  }
+})
+
+// PATCH /orders/:id -> atualiza dados simples (endereço, observação, status)
+router.patch('/:id', async (req, res) => {
+  try {
+    const { address, note, status } = req.body
+    const data = {}
+    if (address !== undefined) data.address = address
+    if (note !== undefined) data.note = note
+    if (status !== undefined) data.status = status
+
+    const order = await prisma.order.update({
+      where: { id: req.params.id },
+      data,
+      include: orderInclude,
+    })
+    res.json(cleanOrder(order))
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ message: 'Pedido não encontrado' })
+    res.status(500).json({ message: 'Erro ao atualizar pedido' })
+  }
+})
+
+// PATCH /orders/:id/status -> avança/altera o status do pedido
+router.patch('/:id/status', async (req, res) => {
+  try {
+    const { status } = req.body
+    if (!STATUSES.includes(status)) {
+      return res.status(400).json({ message: 'Status inválido' })
+    }
+    const order = await prisma.order.update({
+      where: { id: req.params.id },
+      data: { status },
+      include: orderInclude,
+    })
+    res.json(cleanOrder(order))
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ message: 'Pedido não encontrado' })
+    res.status(500).json({ message: 'Erro ao atualizar status' })
+  }
+})
+
+// DELETE /orders/:id
+router.delete('/:id', async (req, res) => {
+  try {
+    await prisma.order.delete({ where: { id: req.params.id } })
+    res.json({ message: 'Pedido excluído' })
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ message: 'Pedido não encontrado' })
+    res.status(500).json({ message: 'Erro ao excluir pedido' })
+  }
+})
+
+module.exports = router
