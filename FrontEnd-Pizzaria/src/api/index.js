@@ -1,7 +1,11 @@
 import axios from 'axios'
 
-// Em produção (Render) a variável vem só com o host; garante o protocolo https:// - [Pedro Marinho]
-const RAW_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+// Define a URL da API - [Pedro Marinho]
+// 1) Usa VITE_API_URL se definida no build; 2) senão, detecta produção pelo domínio
+//    (em onrender.com aponta para a API publicada; em localhost usa a API local).
+const PROD_API_URL = 'https://pizzaria-api-10pp.onrender.com'
+const isLocalhost = typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
+const RAW_API_URL = import.meta.env.VITE_API_URL || (isLocalhost ? 'http://localhost:4000' : PROD_API_URL)
 const BASE_URL = /^https?:\/\//.test(RAW_API_URL) ? RAW_API_URL : `https://${RAW_API_URL}`
 
 const api = axios.create({
