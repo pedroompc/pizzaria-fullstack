@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ShoppingBag } from 'lucide-react'
 import { ordersApi } from '../../api'
+import { useAuth } from '../../contexts/AuthContext'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import toast from 'react-hot-toast'
@@ -16,15 +17,20 @@ const STATUS_CONFIG = {
 }
 
 export default function MeusPedidosPage() {
+  const { user } = useAuth()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Tenta a rota nova (/orders/mine); se o backend ainda for o antigo (404),
+    // cai para a busca pelos pedidos do próprio usuário. - [Pedro Marinho]
     ordersApi.listMine()
       .then(res => setOrders(res.data || []))
-      .catch(() => toast.error('Erro ao carregar seus pedidos'))
+      .catch(() => ordersApi.listByUser(user?.id)
+        .then(res => setOrders(res.data || []))
+        .catch(() => toast.error('Erro ao carregar seus pedidos')))
       .finally(() => setLoading(false))
-  }, [])
+  }, [user])
 
   return (
     <div>

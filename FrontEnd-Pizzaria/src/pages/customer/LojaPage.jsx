@@ -57,6 +57,9 @@ export default function LojaPage() {
     setSaving(true)
     try {
       await ordersApi.create({
+        // Envia o próprio id: no backend novo é ignorado (forçado pelo token),
+        // no backend atual satisfaz o campo obrigatório. - [Pedro Marinho]
+        userId: user?.id,
         address,
         note,
         items: cartItems.map(i => ({ productId: i.id, quantity: i.qty })),
