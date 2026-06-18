@@ -1,15 +1,9 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Eye, EyeOff, Pizza } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
+import { fetchStates, fetchCities, fetchAddressByCep } from '../../services/geo'
 import toast from 'react-hot-toast'
-
-// Brazilian states for the select
-const STATES = [
-  'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS',
-  'MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC',
-  'SP','SE','TO'
-]
 
 export default function RegisterPage() {
   const { register } = useAuth()
@@ -21,7 +15,49 @@ export default function RegisterPage() {
   const [showPwd, setShowPwd] = useState(false)
   const [loading, setLoading] = useState(false)
 
+  // Estados e municípios vindos da API do IBGE - [Pedro Marinho]
+  const [states, setStates] = useState([])
+  const [cities, setCities] = useState([])
+  const [loadingCep, setLoadingCep] = useState(false)
+
+  // Carrega a lista de estados ao montar a tela
+  useEffect(() => {
+    fetchStates()
+      .then(setStates)
+      .catch(() => toast.error('Não foi possível carregar os estados (IBGE)'))
+  }, [])
+
+  // Sempre que o estado selecionado mudar, recarrega os municípios
+  useEffect(() => {
+    if (!form.state) { setCities([]); return }
+    fetchCities(form.state)
+      .then(setCities)
+      .catch(() => toast.error('Não foi possível carregar os municípios (IBGE)'))
+  }, [form.state])
+
   const handle = (e) => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
+
+  // Ao sair do campo CEP, consulta o ViaCEP e preenche o endereço automaticamente
+  const handleCepBlur = async () => {
+    const clean = form.cep.replace(/\D/g, '')
+    if (clean.length !== 8) return
+    setLoadingCep(true)
+    try {
+      const addr = await fetchAddressByCep(clean)
+      if (!addr) { toast.error('CEP não encontrado'); return }
+      setForm(f => ({
+        ...f,
+        street: addr.street || f.street,
+        neighborhood: addr.neighborhood || f.neighborhood,
+        state: addr.state || f.state,
+        city: addr.city || f.city,
+      }))
+    } catch {
+      toast.error('Erro ao consultar o CEP')
+    } finally {
+      setLoadingCep(false)
+    }
+  }
 
   const submit = async (e) => {
     e.preventDefault()
@@ -129,6 +165,15 @@ export default function RegisterPage() {
                 Endereço
               </div>
 
+              <div className="form-group">
+                <label className="form-label">CEP (preenche o endereço automaticamente)</label>
+                <input
+                  className="form-input" name="cep" placeholder="50000-000"
+                  value={form.cep} onChange={handle} onBlur={handleCepBlur}
+                />
+                {loadingCep && <span style={{ fontSize: 12, color: 'var(--cream-faint)' }}>Buscando CEP…</span>}
+              </div>
+
               <div className="form-row">
                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                   <label className="form-label">Rua / Logradouro</label>
@@ -154,20 +199,19 @@ export default function RegisterPage() {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">Cidade</label>
-                  <input className="form-input" name="city" placeholder="Recife" value={form.city} onChange={handle} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Estado</label>
+                  <label className="form-label">Estado (IBGE)</label>
                   <select className="form-select" name="state" value={form.state} onChange={handle}>
-                    {STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                    <option value="">Selecione…</option>
+                    {states.map(s => <option key={s.id} value={s.sigla}>{s.sigla} — {s.nome}</option>)}
                   </select>
                 </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">CEP</label>
-                <input className="form-input" name="cep" placeholder="50000-000" value={form.cep} onChange={handle} />
+                <div className="form-group">
+                  <label className="form-label">Cidade (IBGE)</label>
+                  <select className="form-select" name="city" value={form.city} onChange={handle} disabled={!cities.length}>
+                    <option value="">{cities.length ? 'Selecione…' : 'Escolha o estado primeiro'}</option>
+                    {cities.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
+                  </select>
+                </div>
               </div>
             </div>
 
