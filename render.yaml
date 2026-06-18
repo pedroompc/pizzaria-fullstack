@@ -22,12 +22,9 @@ services:
     buildCommand: npm install && npm run build
     staticPublishPath: dist
     envVars:
-      # Pega automaticamente o host da API acima e injeta no build do frontend
+      # URL pública da API (definida explicitamente para o build do frontend)
       - key: VITE_API_URL
-        fromService:
-          type: web
-          name: pizzaria-api
-          property: host
+        value: https://pizzaria-api-10pp.onrender.com
     routes:
       # SPA: qualquer rota cai no index.html (React Router cuida do resto)
       - type: rewrite
