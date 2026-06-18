@@ -86,6 +86,7 @@ export const categoriesApi = {
 // ============================================================
 export const ordersApi = {
   list: () => api.get('/orders'),
+  listMine: () => api.get('/orders/mine'),
   listByStatus: (status) => api.get(`/orders/status/${status}`),
   listByUser: (userId) => api.get(`/orders/user/${userId}`),
   getById: (id) => api.get(`/orders/${id}`),

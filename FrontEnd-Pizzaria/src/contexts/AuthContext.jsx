@@ -19,6 +19,9 @@ export function AuthProvider({ children }) {
     setLoading(false)
   }, [])
 
+  // Destino conforme o papel: gestão para gerente/admin, loja para cliente - [Pedro Marinho]
+  const homeFor = (u) => (u?.role === 'MANAGER' || u?.role === 'SUPER_ADMIN') ? '/dashboard' : '/loja'
+
   const login = async (email, pwd) => {
     const res = await authApi.login({ email, pwd })
     const { token, user: u } = res.data
@@ -26,7 +29,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem('pizza_user', JSON.stringify(u))
     setUser(u)
     toast.success(`Bem-vindo, ${u.name}!`)
-    navigate('/dashboard')
+    navigate(homeFor(u))
   }
 
   const register = async (data) => {
@@ -36,7 +39,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem('pizza_user', JSON.stringify(u))
     setUser(u)
     toast.success('Conta criada com sucesso!')
-    navigate('/dashboard')
+    navigate(homeFor(u))
   }
 
   const logout = () => {
