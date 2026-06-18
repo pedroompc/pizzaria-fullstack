@@ -31,4 +31,11 @@ function signToken(user) {
   )
 }
 
-module.exports = { authRequired, signToken, JWT_SECRET }
+// Restringe a rota a gerentes/administradores (bloqueia CUSTOMER) - [Pedro Marinho]
+function requireManager(req, res, next) {
+  const role = req.user?.role
+  if (role === 'MANAGER' || role === 'SUPER_ADMIN') return next()
+  return res.status(403).json({ message: 'Acesso restrito a gerentes e administradores' })
+}
+
+module.exports = { authRequired, signToken, requireManager, JWT_SECRET }

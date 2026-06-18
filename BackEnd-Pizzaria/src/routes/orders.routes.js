@@ -1,15 +1,15 @@
-// CRUD de pedidos, com itens e cálculo de total - [Pedro Marinho]
+// CRUD de pedidos, com itens, cálculo de total e regras por papel - [Pedro Marinho]
+// Cliente (CUSTOMER): cria e vê apenas os PRÓPRIOS pedidos.
+// Gerente/Admin: vê todos, atualiza status e exclui.
 const { Router } = require('express')
 const prisma = require('../lib/prisma')
-const { authRequired } = require('../middleware/auth')
+const { authRequired, requireManager } = require('../middleware/auth')
 const { sanitizeUser } = require('../lib/helpers')
 
 const router = Router()
 router.use(authRequired)
 
-// Define o que vem aninhado em cada pedido:
-// - user (nome/telefone para a tabela e detalhe)
-// - items -> product (nome do produto em cada item)
+// Define o que vem aninhado em cada pedido (cliente + itens com produto)
 const orderInclude = {
   user: true,
   items: { include: { product: true } },
@@ -23,14 +23,27 @@ function cleanOrder(order) {
 
 const STATUSES = ['PENDING', 'PREPARING', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED']
 
-// GET /orders -> todos os pedidos (mais recentes primeiro)
-router.get('/', async (_req, res) => {
+// Helper: o usuário logado é gerente/admin?
+const isManager = (req) => req.user.role === 'MANAGER' || req.user.role === 'SUPER_ADMIN'
+
+// GET /orders/mine -> pedidos do próprio usuário logado (usado pela área do cliente)
+router.get('/mine', async (req, res) => {
+  const orders = await prisma.order.findMany({
+    where: { userId: req.user.id },
+    include: orderInclude,
+    orderBy: { createdAt: 'desc' },
+  })
+  res.json(orders.map(cleanOrder))
+})
+
+// GET /orders -> todos os pedidos (somente gerente/admin)
+router.get('/', requireManager, async (_req, res) => {
   const orders = await prisma.order.findMany({ include: orderInclude, orderBy: { createdAt: 'desc' } })
   res.json(orders.map(cleanOrder))
 })
 
-// GET /orders/status/:status
-router.get('/status/:status', async (req, res) => {
+// GET /orders/status/:status (somente gerente/admin)
+router.get('/status/:status', requireManager, async (req, res) => {
   const orders = await prisma.order.findMany({
     where: { status: req.params.status },
     include: orderInclude,
@@ -39,8 +52,8 @@ router.get('/status/:status', async (req, res) => {
   res.json(orders.map(cleanOrder))
 })
 
-// GET /orders/user/:userId
-router.get('/user/:userId', async (req, res) => {
+// GET /orders/user/:userId (somente gerente/admin)
+router.get('/user/:userId', requireManager, async (req, res) => {
   const orders = await prisma.order.findMany({
     where: { userId: req.params.userId },
     include: orderInclude,
@@ -49,19 +62,23 @@ router.get('/user/:userId', async (req, res) => {
   res.json(orders.map(cleanOrder))
 })
 
-// GET /orders/:id
+// GET /orders/:id -> gerente vê qualquer um; cliente só o próprio
 router.get('/:id', async (req, res) => {
   const order = await prisma.order.findUnique({ where: { id: req.params.id }, include: orderInclude })
   if (!order) return res.status(404).json({ message: 'Pedido não encontrado' })
+  if (!isManager(req) && order.userId !== req.user.id) {
+    return res.status(403).json({ message: 'Você não tem acesso a este pedido' })
+  }
   res.json(cleanOrder(order))
 })
 
-// POST /orders -> { userId, address, note, items: [{ productId, quantity }] }
-// Calcula o preço de cada item e o total do pedido no servidor.
+// POST /orders -> { userId?, address, note, items: [{ productId, quantity }] }
+// Cliente cria sempre para si mesmo (userId ignorado); gerente pode criar para um cliente.
 router.post('/', async (req, res) => {
   try {
-    const { userId, address, note, items } = req.body
-    if (!userId) return res.status(400).json({ message: 'Cliente (userId) é obrigatório' })
+    const { address, note, items } = req.body
+    const userId = isManager(req) ? (req.body.userId || req.user.id) : req.user.id
+
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: 'O pedido precisa de ao menos um item' })
     }
@@ -101,8 +118,8 @@ router.post('/', async (req, res) => {
   }
 })
 
-// PATCH /orders/:id -> atualiza dados simples (endereço, observação, status)
-router.patch('/:id', async (req, res) => {
+// PATCH /orders/:id -> atualiza dados simples (somente gerente/admin)
+router.patch('/:id', requireManager, async (req, res) => {
   try {
     const { address, note, status } = req.body
     const data = {}
@@ -122,8 +139,8 @@ router.patch('/:id', async (req, res) => {
   }
 })
 
-// PATCH /orders/:id/status -> avança/altera o status do pedido
-router.patch('/:id/status', async (req, res) => {
+// PATCH /orders/:id/status -> avança/altera o status (somente gerente/admin)
+router.patch('/:id/status', requireManager, async (req, res) => {
   try {
     const { status } = req.body
     if (!STATUSES.includes(status)) {
@@ -141,8 +158,8 @@ router.patch('/:id/status', async (req, res) => {
   }
 })
 
-// DELETE /orders/:id
-router.delete('/:id', async (req, res) => {
+// DELETE /orders/:id (somente gerente/admin)
+router.delete('/:id', requireManager, async (req, res) => {
   try {
     await prisma.order.delete({ where: { id: req.params.id } })
     res.json({ message: 'Pedido excluído' })

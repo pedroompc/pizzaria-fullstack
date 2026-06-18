@@ -1,10 +1,12 @@
 // CRUD de categorias de produtos - [Pedro Marinho]
 const { Router } = require('express')
 const prisma = require('../lib/prisma')
-const { authRequired } = require('../middleware/auth')
+const { authRequired, requireManager } = require('../middleware/auth')
 
 const router = Router()
+// Gestão de categorias: somente gerente/admin
 router.use(authRequired)
+router.use(requireManager)
 
 // GET /categories -> lista categorias com a contagem de produtos (_count.products)
 router.get('/', async (_req, res) => {

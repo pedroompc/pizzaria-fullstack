@@ -1,9 +1,11 @@
 // CRUD de produtos do cardápio - [Pedro Marinho]
 const { Router } = require('express')
 const prisma = require('../lib/prisma')
-const { authRequired } = require('../middleware/auth')
+const { authRequired, requireManager } = require('../middleware/auth')
 
 const router = Router()
+// Leitura do cardápio: qualquer usuário logado (inclusive cliente).
+// Escrita (criar/editar/excluir): apenas gerente/admin (requireManager por rota).
 router.use(authRequired)
 
 // Inclui sempre a categoria aninhada (o frontend lê product.category.name)
@@ -43,7 +45,7 @@ router.get('/:id', async (req, res) => {
 })
 
 // POST /products -> { name, description, price, categoryId, available }
-router.post('/', async (req, res) => {
+router.post('/', requireManager, async (req, res) => {
   try {
     const { name, price, description, categoryId, available } = req.body
     if (!name || price === undefined || price === null) {
@@ -67,7 +69,7 @@ router.post('/', async (req, res) => {
 })
 
 // PATCH /products/:id
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', requireManager, async (req, res) => {
   try {
     const { name, description, price, categoryId, available } = req.body
     const data = {}
@@ -91,7 +93,7 @@ router.patch('/:id', async (req, res) => {
 })
 
 // DELETE /products/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireManager, async (req, res) => {
   try {
     await prisma.product.delete({ where: { id: req.params.id } })
     res.json({ message: 'Produto excluído' })

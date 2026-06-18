@@ -2,13 +2,14 @@
 const { Router } = require('express')
 const bcrypt = require('bcryptjs')
 const prisma = require('../lib/prisma')
-const { authRequired } = require('../middleware/auth')
+const { authRequired, requireManager } = require('../middleware/auth')
 const { sanitizeUser } = require('../lib/helpers')
 
 const router = Router()
 
-// Todas as rotas de usuário exigem autenticação
+// Gestão de usuários: exige login E papel de gerente/admin (cliente não acessa)
 router.use(authRequired)
+router.use(requireManager)
 
 // GET /users -> lista todos os usuários
 router.get('/', async (_req, res) => {
