@@ -1,0 +1,35 @@
+# Blueprint de deploy na Render: backend (API) + frontend (estático) - [Pedro Marinho]
+services:
+  # ── API (Node + Express + Prisma + SQLite) ──────────────────
+  - type: web
+    name: pizzaria-api
+    runtime: node
+    rootDir: BackEnd-Pizzaria
+    plan: free
+    buildCommand: npm install && npx prisma generate && npx prisma db push --accept-data-loss && node src/seed.js
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        value: file:./dev.db
+      - key: JWT_SECRET
+        generateValue: true
+
+  # ── Frontend (React buildado com Vite, servido estático) ────
+  - type: web
+    name: pizzaria-web
+    runtime: static
+    rootDir: FrontEnd-Pizzaria
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      # Pega automaticamente o host da API acima e injeta no build do frontend
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: pizzaria-api
+          property: host
+    routes:
+      # SPA: qualquer rota cai no index.html (React Router cuida do resto)
+      - type: rewrite
+        source: /*
+        destination: /index.html

@@ -1,6 +1,8 @@
 import axios from 'axios'
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+// Em produção (Render) a variável vem só com o host; garante o protocolo https:// - [Pedro Marinho]
+const RAW_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+const BASE_URL = /^https?:\/\//.test(RAW_API_URL) ? RAW_API_URL : `https://${RAW_API_URL}`
 
 const api = axios.create({
   baseURL: BASE_URL,

@@ -4,7 +4,7 @@ require('dotenv').config()
 const bcrypt = require('bcryptjs')
 const prisma = require('./lib/prisma')
 
-async function main() {
+async function seed() {
   console.log('🌱 Limpando dados antigos...')
   // A ordem importa por causa das relações (itens -> pedidos -> ...)
   await prisma.orderItem.deleteMany()
@@ -145,11 +145,17 @@ async function main() {
   console.log('   CLIENTE -> maria@email.com   / cliente123')
 }
 
-main()
-  .catch((e) => {
-    console.error('❌ Erro no seed:', e)
-    process.exit(1)
-  })
-  .finally(async () => {
-    await prisma.$disconnect()
-  })
+// Reutilizável pelo servidor (seed automático quando o banco está vazio)
+module.exports = seed
+
+// Quando rodado direto (npm run seed), executa e encerra a conexão
+if (require.main === module) {
+  seed()
+    .catch((e) => {
+      console.error('❌ Erro no seed:', e)
+      process.exit(1)
+    })
+    .finally(async () => {
+      await prisma.$disconnect()
+    })
+}

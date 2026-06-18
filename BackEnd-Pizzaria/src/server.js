@@ -36,7 +36,26 @@ app.use('/orders', ordersRoutes)
 // 404 para rotas não encontradas
 app.use((_req, res) => res.status(404).json({ message: 'Rota não encontrada' }))
 
-app.listen(PORT, () => {
-  console.log(`🍕 API rodando em http://localhost:${PORT}`)
-  console.log(`📚 Documentação Swagger em http://localhost:${PORT}/docs`)
+// Garante dados iniciais: se o banco estiver vazio, roda o seed automaticamente.
+// Importante em hospedagem gratuita, onde o disco pode reiniciar zerado. - [Pedro Marinho]
+const prisma = require('./lib/prisma')
+const seed = require('./seed')
+
+async function ensureSeed() {
+  try {
+    const count = await prisma.user.count()
+    if (count === 0) {
+      console.log('🌱 Banco vazio — populando dados iniciais...')
+      await seed()
+    }
+  } catch (err) {
+    console.error('Não foi possível verificar/popular o banco:', err.message)
+  }
+}
+
+ensureSeed().finally(() => {
+  app.listen(PORT, () => {
+    console.log(`🍕 API rodando na porta ${PORT}`)
+    console.log(`📚 Documentação Swagger em /docs`)
+  })
 })
